@@ -48,6 +48,8 @@ HelloTriangleApplication::HelloTriangleApplication() :
   , m_device                    ()
   , m_graphicsPipeline          ()
   , m_graphicsQueue             ()
+  , m_indexBuffer               ()
+  , m_indexBufferMemory         ()
   , m_instance                  ()
   , m_physicalDevice            (VK_NULL_HANDLE)
   , m_pipelineLayout            ()
@@ -97,6 +99,9 @@ void HelloTriangleApplication::cleanup()
     // Destroy buffers and free their memory.
     vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
     vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
+
+    vkDestroyBuffer(m_device, m_indexBuffer, nullptr);
+    vkFreeMemory(m_device, m_indexBufferMemory, nullptr);
 
     // Destroy semaphores.
     for (size_t i = 0; i < m_MAX_FRAMES_IN_FLIGHT; ++ i)
@@ -179,8 +184,11 @@ void HelloTriangleApplication::createCommandBuffers()
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
 
+        // Bind the index buffer.
+        vkCmdBindIndexBuffer(m_commandBuffers[i], m_indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
         // Draw using the command in the command buffer.
-        vkCmdDraw(m_commandBuffers[i], static_cast<uint32_t>(g_vertices.size()), 1, 0, 0);
+        vkCmdDrawIndexed(m_commandBuffers[i], static_cast<uint32_t>(g_indices.size()), 1, 0, 0, 0);
 
         // End render pass.
         vkCmdEndRenderPass(m_commandBuffers[i]);
@@ -429,6 +437,42 @@ void HelloTriangleApplication::createImageViews()
             throw std::runtime_error("failed to create image views");
         }
     }
+}
+
+void HelloTriangleApplication::createIndexBuffer()
+{
+    // Create staging buffer (visible on CPU).
+    VkDeviceSize bufferSize = sizeof(g_indices[0]) * g_indices.size();
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    createBuffer(
+        bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        stagingBuffer, stagingBufferMemory
+    );
+
+    // Map the staging buffer memory into CPU accessible memory.
+    void* data;
+    vkMapMemory(m_device, stagingBufferMemory, 0, bufferSize, 0, &data);
+
+    // Copy the vertices to the (mapped) buffer memory.
+    memcpy(data, g_indices.data(), static_cast<size_t>(bufferSize));
+
+    // Unmap the staging buffer memory.
+    vkUnmapMemory(m_device, stagingBufferMemory);
+
+    // Create destination buffer (not visible on CPU).
+    createBuffer(
+        bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_indexBuffer, m_indexBufferMemory
+    );
+
+    // Copy buffer from staging buffer to destination buffer.
+    copyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
+
+    // Clean up staging buffer and its memory.
+    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+    vkFreeMemory(m_device, stagingBufferMemory, nullptr);
 }
 
 void HelloTriangleApplication::createInstance()
@@ -859,6 +903,7 @@ void HelloTriangleApplication::initVulkan()
     createFramebuffers();
     createCommandPools();
     createVertexBuffer();
+    createIndexBuffer();
     createCommandBuffers();
     createSyncObjects();
 }

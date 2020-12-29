@@ -74,9 +74,14 @@ const std::vector<const char*> g_deviceExtensions = {
 };
 
 const std::vector<Vertex> g_vertices = {
-    { {  .0f, -.5f }, { 1.f, .0f, .0f } },
-    { {  .5f,  .5f }, { .0f, 1.f, .0f } },
-    { { -.5f,  .5f }, { .0f, .0f, 1.f } }
+    { { -0.5f, -0.5f }, { 1.0f, 0.0f, 0.0f } },
+    { {  0.5f, -0.5f }, { 0.0f, 1.0f, 0.0f } },
+    { {  0.5f,  0.5f }, { 0.0f, 0.0f, 1.0f } },
+    { { -0.5f,  0.5f }, { 1.0f, 1.0f, 1.0f } }
+};
+
+const std::vector<uint16_t> g_indices = {
+    0, 1, 2, 2, 3, 0
 };
 
 /* ************************************************************************************************
@@ -137,6 +142,7 @@ private:
     void createFramebuffers();
     void createGraphicsPipeline();
     void createImageViews();
+    void createIndexBuffer();
     void createInstance();
     void createLogicalDevice();
     void createRenderPass();
@@ -193,6 +199,8 @@ private:
     VkDevice                        m_device;
     VkPipeline                      m_graphicsPipeline;
     VkQueue                         m_graphicsQueue;
+    VkBuffer                        m_indexBuffer;
+    VkDeviceMemory                  m_indexBufferMemory;
     VkInstance                      m_instance;
     VkPhysicalDevice                m_physicalDevice;
     VkPipelineLayout                m_pipelineLayout;

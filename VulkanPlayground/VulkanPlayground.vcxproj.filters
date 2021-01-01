@@ -16,6 +16,9 @@
     <Filter Include="shaders">
       <UniqueIdentifier>{6e404986-1bb2-4136-ac06-2eba6ab610a2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="textures">
+      <UniqueIdentifier>{318d99a9-629f-4b90-b198-846d3f854ebd}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">

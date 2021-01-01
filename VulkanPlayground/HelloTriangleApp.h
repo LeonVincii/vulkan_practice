@@ -1,13 +1,13 @@
 #pragma once
 
 #define GLFW_INCLUDE_VULKAN
-
 #include <GLFW/glfw3.h>
+
+#include <glm/glm.hpp>
 
 #include <array>
 #include <cstdlib>
 #include <cstring>
-#include <glm/glm.hpp>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -54,6 +54,13 @@ struct Vertex
 
         return attributeDescriptions;
     }
+};
+
+struct UniformBufferObject
+{
+    alignas(16) glm::mat4 model;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 proj;
 };
 
 /* ************************************************************************************************
@@ -139,6 +146,9 @@ private:
     void cleanup();
     void createCommandBuffers();
     void createCommandPools();
+    void createDescriptorSetlayout();
+    void createDescriptorSets();
+    void createDescriptorPool();
     void createFramebuffers();
     void createGraphicsPipeline();
     void createImageViews();
@@ -149,6 +159,8 @@ private:
     void createSyncObjects();
     void createSurface();
     void createSwapchain();
+    void createTextureImage();
+    void createUniformBuffers();
     void createVertexBuffer();
     void destroySwapchain();
     void drawFrame();
@@ -157,6 +169,8 @@ private:
     void mainLoop();
     void recreateSwapchain();
     void setupDebugMessenger();
+    void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+    void updateUniformBuffer(uint32_t imageIndex);
 
     // Static Functions ---------------------------------------------------------------------------/
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
@@ -166,6 +180,7 @@ private:
      * ********************************************************************************************/
     static std::vector<char> readFile(const std::string& filename);
 
+    VkCommandBuffer beginSingleTimeCommands();
     bool checkDeviceExtensionSupport(VkPhysicalDevice device);
     bool checkValidationLayerSupport();
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
@@ -174,12 +189,16 @@ private:
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
         VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
         VkDebugUtilsMessageTypeFlagsEXT messageType,
-        const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-        void* pUserData);
+        const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+    void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
         VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+    void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling,
+        VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image,
+        VkDeviceMemory& imageMemory);
     VkShaderModule createShaderModule(const std::vector<char>& code);
+    void endSingleTimeCommands(VkCommandBuffer commandBuffer);
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
     std::vector<const char*> getRequiredExtensions();
@@ -196,6 +215,9 @@ private:
     VkCommandPool                   m_commandPoolTransient;
     size_t                          m_currentFrame;
     VkDebugUtilsMessengerEXT        m_debugMessenger;
+    VkDescriptorPool                m_descriptorPool;
+    VkDescriptorSetLayout           m_descriptorSetLayout;
+    std::vector<VkDescriptorSet>    m_descriptorSets;
     VkDevice                        m_device;
     VkPipeline                      m_graphicsPipeline;
     VkQueue                         m_graphicsQueue;
@@ -213,6 +235,10 @@ private:
     std::vector<VkImage>            m_swapchainImages;
     VkFormat                        m_swapchainImageFormat;
     std::vector<VkImageView>        m_swapchainImageViews;
+    VkImage                         m_textureImage;
+    VkDeviceMemory                  m_textureImageMemory;
+    std::vector<VkBuffer>           m_uniformBuffers;
+    std::vector<VkDeviceMemory>     m_uniformBuffersMemory;
     VkBuffer                        m_vertexBuffer;
     VkDeviceMemory                  m_vertexBufferMemory;
     GLFWwindow*                     m_window;

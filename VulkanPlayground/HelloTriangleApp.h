@@ -160,6 +160,7 @@ private:
     void createSurface();
     void createSwapchain();
     void createTextureImage();
+    void createTextureImageView();
     void createUniformBuffers();
     void createVertexBuffer();
     void destroySwapchain();
@@ -197,6 +198,7 @@ private:
     void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling,
         VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image,
         VkDeviceMemory& imageMemory);
+    VkImageView createImageView(VkImage image, VkFormat format);
     VkShaderModule createShaderModule(const std::vector<char>& code);
     void endSingleTimeCommands(VkCommandBuffer commandBuffer);
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
@@ -237,6 +239,7 @@ private:
     std::vector<VkImageView>        m_swapchainImageViews;
     VkImage                         m_textureImage;
     VkDeviceMemory                  m_textureImageMemory;
+    VkImageView                     m_textureImageView;
     std::vector<VkBuffer>           m_uniformBuffers;
     std::vector<VkDeviceMemory>     m_uniformBuffersMemory;
     VkBuffer                        m_vertexBuffer;

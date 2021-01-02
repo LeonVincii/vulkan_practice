@@ -74,6 +74,7 @@ HelloTriangleApplication::HelloTriangleApplication() :
   , m_swapchainImageViews       ()
   , m_textureImage              ()
   , m_textureImageMemory        ()
+  , m_textureImageView          ()
   , m_uniformBuffers            ()
   , m_uniformBuffersMemory      ()
   , m_vertexBuffer              ()
@@ -113,7 +114,8 @@ void HelloTriangleApplication::cleanup()
     // Destroy descriptor set layouts.
     vkDestroyDescriptorSetLayout(m_device, m_descriptorSetLayout, nullptr);
 
-    // Destroy images and free their memory.
+    // Destroy image views, images and free their memory.
+    vkDestroyImageView(m_device, m_textureImageView, nullptr);
     vkDestroyImage(m_device, m_textureImage, nullptr);
     vkFreeMemory(m_device, m_textureImageMemory, nullptr);
 
@@ -520,30 +522,7 @@ void HelloTriangleApplication::createImageViews()
     // Iterates all of the swapchain images.
     for (size_t i = 0; i < m_swapchainImageViews.size(); ++i)
     {
-        VkImageViewCreateInfo createInfo {};
-        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        createInfo.image = m_swapchainImages[i];
-        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        createInfo.format = m_swapchainImageFormat;
-        createInfo.components.r = VK_COMPONENT_SWIZZLE_R;
-        createInfo.components.g = VK_COMPONENT_SWIZZLE_G;
-        createInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-        createInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-
-        // Specify the purpose of the image and which part of the image should be accessed.
-        // For this case, the images will be used as colour targets without any mipmaapping levels
-        // nor mutiple layers.
-        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        createInfo.subresourceRange.baseMipLevel = 0;
-        createInfo.subresourceRange.levelCount = 1;
-        createInfo.subresourceRange.baseArrayLayer = 0;
-        createInfo.subresourceRange.layerCount = 1;
-
-        // Create image view.
-        if (vkCreateImageView(m_device, &createInfo, nullptr, &m_swapchainImageViews[i]) != VK_SUCCESS)
-        {
-            throw std::runtime_error("failed to create image views");
-        }
+        m_swapchainImageViews[i] = createImageView(m_swapchainImages[i], m_swapchainImageFormat);
     }
 }
 
@@ -886,6 +865,11 @@ void HelloTriangleApplication::createTextureImage()
     vkFreeMemory(m_device, stagingBufferMemory, nullptr);
 }
 
+void HelloTriangleApplication::createTextureImageView()
+{
+    m_textureImageView = createImageView(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB);
+}
+
 void HelloTriangleApplication::createUniformBuffers()
 {
     VkDeviceSize bufferSize = sizeof(UniformBufferObject);
@@ -1102,6 +1086,7 @@ void HelloTriangleApplication::initVulkan()
     createFramebuffers();
     createCommandPools();
     createTextureImage();
+    createTextureImageView();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -1524,6 +1509,33 @@ void HelloTriangleApplication::createImage(uint32_t width, uint32_t height, VkFo
 
     // Bind the image object with its allocated memory.
     vkBindImageMemory(m_device, image, imageMemory, 0);
+}
+
+VkImageView HelloTriangleApplication::createImageView(VkImage image, VkFormat format)
+{
+    VkImageViewCreateInfo createInfo {};
+    createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    createInfo.image = image;
+    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    createInfo.format = format;
+
+    // Specify the purpose of the image and which part of the image should be accessed.
+    // For this case, the images will be used as colour targets without any mipmaapping levels
+    // nor mutiple layers.
+    createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    createInfo.subresourceRange.baseMipLevel = 0;
+    createInfo.subresourceRange.levelCount = 1;
+    createInfo.subresourceRange.baseArrayLayer = 0;
+    createInfo.subresourceRange.layerCount = 1;
+
+    // Create image view.
+    VkImageView imageView;
+    if (vkCreateImageView(m_device, &createInfo, nullptr, &imageView) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create texture image view");
+    }
+
+    return imageView;
 }
 
 VkShaderModule HelloTriangleApplication::createShaderModule(const std::vector<char>& code)

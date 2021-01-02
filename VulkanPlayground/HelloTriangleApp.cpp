@@ -75,6 +75,7 @@ HelloTriangleApplication::HelloTriangleApplication() :
   , m_textureImage              ()
   , m_textureImageMemory        ()
   , m_textureImageView          ()
+  , m_textureSampler            ()
   , m_uniformBuffers            ()
   , m_uniformBuffersMemory      ()
   , m_vertexBuffer              ()
@@ -113,6 +114,9 @@ void HelloTriangleApplication::cleanup()
 
     // Destroy descriptor set layouts.
     vkDestroyDescriptorSetLayout(m_device, m_descriptorSetLayout, nullptr);
+
+    // Destroy samplers.
+    vkDestroySampler(m_device, m_textureSampler, nullptr);
 
     // Destroy image views, images and free their memory.
     vkDestroyImageView(m_device, m_textureImageView, nullptr);
@@ -256,7 +260,7 @@ void HelloTriangleApplication::createCommandPools()
 
 void HelloTriangleApplication::createDescriptorSetlayout()
 {
-    // Describe the binding for UniformBufferObject.
+    // Describe the binding for uniform buffer object.
     VkDescriptorSetLayoutBinding uboLayoutBinding {};
     uboLayoutBinding.binding = 0;
     uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -264,11 +268,22 @@ void HelloTriangleApplication::createDescriptorSetlayout()
     uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     uboLayoutBinding.pImmutableSamplers = nullptr;
 
+    // Describe the binding for combined image sampler.
+    VkDescriptorSetLayoutBinding samplerLayoutBinding {};
+    samplerLayoutBinding.binding = 1;
+    samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    samplerLayoutBinding.descriptorCount = 1;
+    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    samplerLayoutBinding.pImmutableSamplers = nullptr;
+
     // Create descriptor set layout object.
+    std::array<VkDescriptorSetLayoutBinding, 2> layoutBindings = {
+        uboLayoutBinding, samplerLayoutBinding
+    };
     VkDescriptorSetLayoutCreateInfo layoutInfo {};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings = &uboLayoutBinding;
+    layoutInfo.bindingCount = 2;
+    layoutInfo.pBindings = layoutBindings.data();
 
     if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorSetLayout) != VK_SUCCESS)
     {
@@ -300,33 +315,52 @@ void HelloTriangleApplication::createDescriptorSets()
         bufferInfo.offset = 0;
         bufferInfo.range = sizeof(UniformBufferObject);
 
-        VkWriteDescriptorSet writeDescriptor {};
-        writeDescriptor.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeDescriptor.dstSet = m_descriptorSets[i];
-        writeDescriptor.dstBinding = 0;
-        writeDescriptor.dstArrayElement = 0;
-        writeDescriptor.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writeDescriptor.descriptorCount = 1;
-        writeDescriptor.pBufferInfo = &bufferInfo;
-        writeDescriptor.pImageInfo = nullptr;
-        writeDescriptor.pTexelBufferView = nullptr;
+        VkDescriptorImageInfo imageInfo {};
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfo.imageView = m_textureImageView;
+        imageInfo.sampler = m_textureSampler;
 
-        vkUpdateDescriptorSets(m_device, 1, &writeDescriptor, 0, nullptr);
+        std::array<VkWriteDescriptorSet, 2> writeDescriptors {};
+
+        writeDescriptors[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeDescriptors[0].dstSet = m_descriptorSets[i];
+        writeDescriptors[0].dstBinding = 0;
+        writeDescriptors[0].dstArrayElement = 0;
+        writeDescriptors[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writeDescriptors[0].descriptorCount = 1;
+        writeDescriptors[0].pBufferInfo = &bufferInfo;
+
+        writeDescriptors[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeDescriptors[1].dstSet = m_descriptorSets[i];
+        writeDescriptors[1].dstBinding = 1;
+        writeDescriptors[1].dstArrayElement = 0;
+        writeDescriptors[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writeDescriptors[1].descriptorCount = 1;
+        writeDescriptors[1].pImageInfo = &imageInfo;
+
+        vkUpdateDescriptorSets(
+            m_device, static_cast<uint32_t>(writeDescriptors.size()), writeDescriptors.data(), 0,
+            nullptr
+        );
     }
 }
 
 void HelloTriangleApplication::createDescriptorPool()
 {
     // Describe which descriptor types the descriptor sets are going to contain and how many of them.
-    VkDescriptorPoolSize poolSize {};
-    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSize.descriptorCount = static_cast<uint32_t>(m_swapchainImages.size());
+    std::array<VkDescriptorPoolSize, 2> poolSizes {};
+
+    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(m_swapchainImages.size());
+
+    poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSizes[1].descriptorCount = static_cast<uint32_t>(m_swapchainImages.size());
 
     // Create descriptor pool.
     VkDescriptorPoolCreateInfo poolInfo {};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
     poolInfo.maxSets = static_cast<uint32_t>(m_swapchainImages.size());
 
     if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
@@ -627,6 +661,7 @@ void HelloTriangleApplication::createLogicalDevice()
 
     // Specify the used device features.
     VkPhysicalDeviceFeatures deviceFeatures {};
+    deviceFeatures.samplerAnisotropy = VK_TRUE;
 
     // Create logical device.
     VkDeviceCreateInfo createInfo {};
@@ -870,6 +905,35 @@ void HelloTriangleApplication::createTextureImageView()
     m_textureImageView = createImageView(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB);
 }
 
+void HelloTriangleApplication::createTextureSampler()
+{
+    VkPhysicalDeviceProperties properties {};
+    vkGetPhysicalDeviceProperties(m_physicalDevice, &properties);
+
+    VkSamplerCreateInfo samplerInfo {};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.f;
+    samplerInfo.minLod = 0.f;
+    samplerInfo.maxLod = 0.f;
+
+    if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_textureSampler) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create texture sampler");
+    }
+}
+
 void HelloTriangleApplication::createUniformBuffers()
 {
     VkDeviceSize bufferSize = sizeof(UniformBufferObject);
@@ -1087,6 +1151,7 @@ void HelloTriangleApplication::initVulkan()
     createCommandPools();
     createTextureImage();
     createTextureImageView();
+    createTextureSampler();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -1676,6 +1741,11 @@ bool HelloTriangleApplication::isDeviceSuitable(VkPhysicalDevice device)
     bool swapChainAdequate = false;
     SwapchainSupportDetails swapChainDetails = querySwapchainSupport(device);
     if (swapChainDetails.formats.empty() || swapChainDetails.presentModes.empty()) { return false; }
+
+    // Check device features support.
+    VkPhysicalDeviceFeatures supportedFeatures;
+    vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
+    if (!supportedFeatures.samplerAnisotropy) { return false; }
 
     return true;
 }

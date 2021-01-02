@@ -10,11 +10,12 @@ layout(binding = 0) uniform UniformBufferObject
 
 layout(location = 0) in vec2 inPosition;
 layout(location = 1) in vec3 inColor;
+layout(location = 2) in vec2 inTextureCoord;
 
-layout(location = 0) out vec3 outFragColor;
+layout(location = 0) out vec2 outTextureCoord;
 
 void main()
 {
     gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 0.0, 1.0);
-    outFragColor = inColor;
+    outTextureCoord = inTextureCoord;
 }

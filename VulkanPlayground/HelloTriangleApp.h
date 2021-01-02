@@ -26,6 +26,7 @@ struct Vertex
 {
     glm::vec2 pos;
     glm::vec3 color;
+    glm::vec2 textureCoord;
 
     static VkVertexInputBindingDescription getBindingDescription()
     {
@@ -37,10 +38,10 @@ struct Vertex
         return bindingDescription;
     }
 
-    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions()
+    static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions()
     {
         // Return two attribute description structs, one for position and one for color.
-        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions {};
+        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions {};
         // Read position attributes.
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
@@ -51,6 +52,11 @@ struct Vertex
         attributeDescriptions[1].location = 1;
         attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
         attributeDescriptions[1].offset = offsetof(Vertex, color);
+        // Read texture coordinate attributes.
+        attributeDescriptions[2].binding = 0;
+        attributeDescriptions[2].location = 2;
+        attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+        attributeDescriptions[2].offset = offsetof(Vertex, textureCoord);
 
         return attributeDescriptions;
     }
@@ -81,10 +87,10 @@ const std::vector<const char*> g_deviceExtensions = {
 };
 
 const std::vector<Vertex> g_vertices = {
-    { { -0.5f, -0.5f }, { 1.0f, 0.0f, 0.0f } },
-    { {  0.5f, -0.5f }, { 0.0f, 1.0f, 0.0f } },
-    { {  0.5f,  0.5f }, { 0.0f, 0.0f, 1.0f } },
-    { { -0.5f,  0.5f }, { 1.0f, 1.0f, 1.0f } }
+    { { -0.5f, -0.5f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 0.0f } },
+    { {  0.5f, -0.5f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 0.0f } },
+    { {  0.5f,  0.5f }, { 0.0f, 0.0f, 1.0f }, { 0.0f, 1.0f } },
+    { { -0.5f,  0.5f }, { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f } }
 };
 
 const std::vector<uint16_t> g_indices = {
@@ -161,6 +167,7 @@ private:
     void createSwapchain();
     void createTextureImage();
     void createTextureImageView();
+    void createTextureSampler();
     void createUniformBuffers();
     void createVertexBuffer();
     void destroySwapchain();
@@ -240,6 +247,7 @@ private:
     VkImage                         m_textureImage;
     VkDeviceMemory                  m_textureImageMemory;
     VkImageView                     m_textureImageView;
+    VkSampler                       m_textureSampler;
     std::vector<VkBuffer>           m_uniformBuffers;
     std::vector<VkDeviceMemory>     m_uniformBuffersMemory;
     VkBuffer                        m_vertexBuffer;

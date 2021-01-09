@@ -7,10 +7,14 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
 #include <chrono>
 #include <cstdint>
 #include <fstream>
 #include <set>
+#include <unordered_map>
 
 /* ************************************************************************************************
  * Global Functions
@@ -64,6 +68,7 @@ HelloTriangleApplication::HelloTriangleApplication() :
   , m_graphicsQueue             ()
   , m_indexBuffer               ()
   , m_indexBufferMemory         ()
+  , m_indices                   ()
   , m_instance                  ()
   , m_physicalDevice            (VK_NULL_HANDLE)
   , m_pipelineLayout            ()
@@ -82,6 +87,7 @@ HelloTriangleApplication::HelloTriangleApplication() :
   , m_textureSampler            ()
   , m_uniformBuffers            ()
   , m_uniformBuffersMemory      ()
+  , m_vertices                  ()
   , m_vertexBuffer              ()
   , m_vertexBufferMemory        ()
   , m_window                    ()
@@ -219,7 +225,7 @@ void HelloTriangleApplication::createCommandBuffers()
         vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
 
         // Bind the index buffer.
-        vkCmdBindIndexBuffer(m_commandBuffers[i], m_indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindIndexBuffer(m_commandBuffers[i], m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
         // Bind the right descriptor set for each swapchain image to the descriptors in the shader.
         vkCmdBindDescriptorSets(
@@ -228,7 +234,7 @@ void HelloTriangleApplication::createCommandBuffers()
         );
 
         // Draw using the command in the command buffer.
-        vkCmdDrawIndexed(m_commandBuffers[i], static_cast<uint32_t>(g_indices.size()), 1, 0, 0, 0);
+        vkCmdDrawIndexed(m_commandBuffers[i], static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
 
         // End render pass.
         vkCmdEndRenderPass(m_commandBuffers[i]);
@@ -592,7 +598,7 @@ void HelloTriangleApplication::createImageViews()
 void HelloTriangleApplication::createIndexBuffer()
 {
     // Create staging buffer (visible on CPU).
-    VkDeviceSize bufferSize = sizeof(g_indices[0]) * g_indices.size();
+    VkDeviceSize bufferSize = sizeof(m_indices[0]) * m_indices.size();
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
     createBuffer(
@@ -606,7 +612,7 @@ void HelloTriangleApplication::createIndexBuffer()
     vkMapMemory(m_device, stagingBufferMemory, 0, bufferSize, 0, &data);
 
     // Copy the vertices to the (mapped) buffer memory.
-    memcpy(data, g_indices.data(), static_cast<size_t>(bufferSize));
+    memcpy(data, m_indices.data(), static_cast<size_t>(bufferSize));
 
     // Unmap the staging buffer memory.
     vkUnmapMemory(m_device, stagingBufferMemory);
@@ -889,7 +895,7 @@ void HelloTriangleApplication::createSwapchain()
 void HelloTriangleApplication::createTextureImage()
 {
     int textureWidth, textureHeight, textureChannels;
-    stbi_uc* pixels = stbi_load("textures/texture.jpg", &textureWidth, &textureHeight, &textureChannels, STBI_rgb_alpha);
+    stbi_uc* pixels = stbi_load(TEXTURE_DIR.c_str(), &textureWidth, &textureHeight, &textureChannels, STBI_rgb_alpha);
     VkDeviceSize imageSize = static_cast<uint64_t>(textureWidth) * static_cast<uint64_t>(textureHeight) * 4;
 
     if (!pixels)
@@ -1000,7 +1006,7 @@ void HelloTriangleApplication::createUniformBuffers()
 void HelloTriangleApplication::createVertexBuffer()
 {
     // Create staging buffer (visible on CPU).
-    VkDeviceSize bufferSize = sizeof(g_vertices[0]) * g_vertices.size();
+    VkDeviceSize bufferSize = sizeof(m_vertices[0]) * m_vertices.size();
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
     createBuffer(
@@ -1014,7 +1020,7 @@ void HelloTriangleApplication::createVertexBuffer()
     vkMapMemory(m_device, stagingBufferMemory, 0, bufferSize, 0, &data);
 
     // Copy the vertices to the (mapped) buffer memory.
-    memcpy(data, g_vertices.data(), static_cast<size_t>(bufferSize));
+    memcpy(data, m_vertices.data(), static_cast<size_t>(bufferSize));
 
     // Unmap the staging buffer memory.
     vkUnmapMemory(m_device, stagingBufferMemory);
@@ -1203,6 +1209,7 @@ void HelloTriangleApplication::initVulkan()
     createTextureImage();
     createTextureImageView();
     createTextureSampler();
+    loadModel();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -1210,6 +1217,47 @@ void HelloTriangleApplication::initVulkan()
     createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
+}
+
+void HelloTriangleApplication::loadModel()
+{
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector < tinyobj::material_t> materials;
+    std::string warn, err;
+
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_DIR.c_str()))
+    {
+        throw std::runtime_error(warn + err);
+    }
+
+    for (const auto& shape : shapes)
+    {
+        std::unordered_map<Vertex, uint32_t> uniqueVertices {};
+
+        for (const auto& index : shape.mesh.indices)
+        {
+            Vertex vertex {};
+
+            vertex.pos = {
+                attrib.vertices[3 * index.vertex_index + 0],
+                attrib.vertices[3 * index.vertex_index + 1],
+                attrib.vertices[3 * index.vertex_index + 2]
+            };
+            vertex.textureCoord = {
+                attrib.texcoords[2 * index.texcoord_index + 0],
+                1.f - attrib.texcoords[2 * index.texcoord_index + 1]
+            };
+
+            if (uniqueVertices.count(vertex) == 0)
+            {
+                uniqueVertices[vertex] = static_cast<uint32_t>(m_vertices.size());
+                m_vertices.push_back(vertex);
+            }
+
+            m_indices.push_back(uniqueVertices[vertex]);
+        }
+    }
 }
 
 void HelloTriangleApplication::mainLoop()

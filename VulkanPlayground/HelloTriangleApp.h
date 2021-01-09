@@ -5,6 +5,9 @@
 
 #include <glm/glm.hpp>
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
+
 #include <array>
 #include <cstdlib>
 #include <cstring>
@@ -27,6 +30,11 @@ struct Vertex
     glm::vec3 pos;
     glm::vec3 color;
     glm::vec2 textureCoord;
+
+    bool operator==(const Vertex& other) const
+    {
+        return pos == other.pos && color == other.color && textureCoord == other.textureCoord;
+    }
 
     static VkVertexInputBindingDescription getBindingDescription()
     {
@@ -62,6 +70,18 @@ struct Vertex
     }
 };
 
+namespace std
+{
+template<> struct hash<Vertex>
+{
+    size_t operator()(Vertex const& vertex) const
+    {
+        return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
+            (hash<glm::vec2>()(vertex.textureCoord) << 1);
+    }
+};
+}
+
 struct UniformBufferObject
 {
     alignas(16) glm::mat4 model;
@@ -75,6 +95,9 @@ struct UniformBufferObject
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
+const std::string MODEL_DIR = "models/viking_room.obj";
+const std::string TEXTURE_DIR = "textures/viking_room.png";
+
 /* ************************************************************************************************
  * Global Variables
  * ************************************************************************************************/
@@ -84,23 +107,6 @@ const std::vector<const char*> g_validationLayers = {
 
 const std::vector<const char*> g_deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
-};
-
-const std::vector<Vertex> g_vertices = {
-    { { -0.5f, -0.5f,  0.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
-    { {  0.5f, -0.5f,  0.0f }, { 0.0f, 1.0f, 0.0f }, { 1.0f, 0.0f } },
-    { {  0.5f,  0.5f,  0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 1.0f } },
-    { { -0.5f,  0.5f,  0.0f }, { 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f } },
-
-    { { -0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
-    { {  0.5f, -0.5f, -0.5f }, { 0.0f, 1.0f, 0.0f }, { 1.0f, 0.0f } },
-    { {  0.5f,  0.5f, -0.5f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 1.0f } },
-    { { -0.5f,  0.5f, -0.5f }, { 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f } }
-};
-
-const std::vector<uint16_t> g_indices = {
-    0, 1, 2, 2, 3, 0,
-    4, 5, 6, 6, 7, 4
 };
 
 /* ************************************************************************************************
@@ -181,6 +187,7 @@ private:
     void drawFrame();
     void initWindow();
     void initVulkan();
+    void loadModel();
     void mainLoop();
     void recreateSwapchain();
     void setupDebugMessenger();
@@ -246,6 +253,7 @@ private:
     VkQueue                         m_graphicsQueue;
     VkBuffer                        m_indexBuffer;
     VkDeviceMemory                  m_indexBufferMemory;
+    std::vector<uint32_t>           m_indices;
     VkInstance                      m_instance;
     VkPhysicalDevice                m_physicalDevice;
     VkPipelineLayout                m_pipelineLayout;
@@ -264,6 +272,7 @@ private:
     VkSampler                       m_textureSampler;
     std::vector<VkBuffer>           m_uniformBuffers;
     std::vector<VkDeviceMemory>     m_uniformBuffersMemory;
+    std::vector<Vertex>             m_vertices;
     VkBuffer                        m_vertexBuffer;
     VkDeviceMemory                  m_vertexBufferMemory;
     GLFWwindow*                     m_window;

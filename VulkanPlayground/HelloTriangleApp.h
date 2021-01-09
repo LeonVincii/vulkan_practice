@@ -24,7 +24,7 @@ const bool enableValidationLayers = true;
  * ************************************************************************************************/
 struct Vertex
 {
-    glm::vec2 pos;
+    glm::vec3 pos;
     glm::vec3 color;
     glm::vec2 textureCoord;
 
@@ -45,7 +45,7 @@ struct Vertex
         // Read position attributes.
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
         attributeDescriptions[0].offset = offsetof(Vertex, pos);
         // Read color attributes.
         attributeDescriptions[1].binding = 0;
@@ -87,14 +87,20 @@ const std::vector<const char*> g_deviceExtensions = {
 };
 
 const std::vector<Vertex> g_vertices = {
-    { { -0.5f, -0.5f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 0.0f } },
-    { {  0.5f, -0.5f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 0.0f } },
-    { {  0.5f,  0.5f }, { 0.0f, 0.0f, 1.0f }, { 0.0f, 1.0f } },
-    { { -0.5f,  0.5f }, { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f } }
+    { { -0.5f, -0.5f,  0.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+    { {  0.5f, -0.5f,  0.0f }, { 0.0f, 1.0f, 0.0f }, { 1.0f, 0.0f } },
+    { {  0.5f,  0.5f,  0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 1.0f } },
+    { { -0.5f,  0.5f,  0.0f }, { 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f } },
+
+    { { -0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+    { {  0.5f, -0.5f, -0.5f }, { 0.0f, 1.0f, 0.0f }, { 1.0f, 0.0f } },
+    { {  0.5f,  0.5f, -0.5f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 1.0f } },
+    { { -0.5f,  0.5f, -0.5f }, { 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f } }
 };
 
 const std::vector<uint16_t> g_indices = {
-    0, 1, 2, 2, 3, 0
+    0, 1, 2, 2, 3, 0,
+    4, 5, 6, 6, 7, 4
 };
 
 /* ************************************************************************************************
@@ -152,6 +158,7 @@ private:
     void cleanup();
     void createCommandBuffers();
     void createCommandPools();
+    void createDepthResources();
     void createDescriptorSetlayout();
     void createDescriptorSets();
     void createDescriptorPool();
@@ -205,12 +212,16 @@ private:
     void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling,
         VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image,
         VkDeviceMemory& imageMemory);
-    VkImageView createImageView(VkImage image, VkFormat format);
+    VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
     VkShaderModule createShaderModule(const std::vector<char>& code);
     void endSingleTimeCommands(VkCommandBuffer commandBuffer);
+    VkFormat findDepthFormat();
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+    VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling,
+        VkFormatFeatureFlags features);
     std::vector<const char*> getRequiredExtensions();
+    bool hasStencilComponent(VkFormat format);
     bool isDeviceSuitable(VkPhysicalDevice device);
     void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
     SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device);
@@ -224,6 +235,9 @@ private:
     VkCommandPool                   m_commandPoolTransient;
     size_t                          m_currentFrame;
     VkDebugUtilsMessengerEXT        m_debugMessenger;
+    VkImage                         m_depthImage;
+    VkDeviceMemory                  m_depthImageMemory;
+    VkImageView                     m_depthImageView;
     VkDescriptorPool                m_descriptorPool;
     VkDescriptorSetLayout           m_descriptorSetLayout;
     std::vector<VkDescriptorSet>    m_descriptorSets;

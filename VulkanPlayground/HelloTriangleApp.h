@@ -185,13 +185,16 @@ private:
     void createVertexBuffer();
     void destroySwapchain();
     void drawFrame();
+    void generateMipmaps(VkImage image, VkFormat imageFormat, int32_t textureWidth, int32_t textureHeight,
+        uint32_t mipLevels);
     void initWindow();
     void initVulkan();
     void loadModel();
     void mainLoop();
     void recreateSwapchain();
     void setupDebugMessenger();
-    void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+    void transitionImageLayout(VkImage image, uint32_t mipLevels, VkFormat format, VkImageLayout oldLayout,
+        VkImageLayout newLayout);
     void updateUniformBuffer(uint32_t imageIndex);
 
     // Static Functions ---------------------------------------------------------------------------/
@@ -216,10 +219,10 @@ private:
     void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
         VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-    void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling,
-        VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image,
+    void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat format,
+        VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image,
         VkDeviceMemory& imageMemory);
-    VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+    VkImageView createImageView(VkImage image, uint32_t mipLevels, VkFormat format, VkImageAspectFlags aspectFlags);
     VkShaderModule createShaderModule(const std::vector<char>& code);
     void endSingleTimeCommands(VkCommandBuffer commandBuffer);
     VkFormat findDepthFormat();
@@ -255,6 +258,7 @@ private:
     VkDeviceMemory                  m_indexBufferMemory;
     std::vector<uint32_t>           m_indices;
     VkInstance                      m_instance;
+    uint32_t                        m_mipLevels;
     VkPhysicalDevice                m_physicalDevice;
     VkPipelineLayout                m_pipelineLayout;
     VkQueue                         m_presentQueue;

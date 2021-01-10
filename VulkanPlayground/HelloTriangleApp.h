@@ -162,6 +162,7 @@ private:
      * Private Functions
      * ********************************************************************************************/
     void cleanup();
+    void createColorResources();
     void createCommandBuffers();
     void createCommandPools();
     void createDepthResources();
@@ -219,9 +220,9 @@ private:
     void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
         VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-    void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat format,
-        VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image,
-        VkDeviceMemory& imageMemory);
+    void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples,
+        VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
+        VkImage& image, VkDeviceMemory& imageMemory);
     VkImageView createImageView(VkImage image, uint32_t mipLevels, VkFormat format, VkImageAspectFlags aspectFlags);
     VkShaderModule createShaderModule(const std::vector<char>& code);
     void endSingleTimeCommands(VkCommandBuffer commandBuffer);
@@ -230,6 +231,7 @@ private:
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
     VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling,
         VkFormatFeatureFlags features);
+    VkSampleCountFlagBits getMaxSampleCount();
     std::vector<const char*> getRequiredExtensions();
     bool hasStencilComponent(VkFormat format);
     bool isDeviceSuitable(VkPhysicalDevice device);
@@ -240,6 +242,9 @@ private:
     /* ********************************************************************************************
      * Private Attributes
      * ********************************************************************************************/
+    VkImage                         m_colorImage;
+    VkDeviceMemory                  m_colorImageMemory;
+    VkImageView                     m_colorImageView;
     std::vector<VkCommandBuffer>    m_commandBuffers;
     VkCommandPool                   m_commandPool;
     VkCommandPool                   m_commandPoolTransient;
@@ -259,6 +264,7 @@ private:
     std::vector<uint32_t>           m_indices;
     VkInstance                      m_instance;
     uint32_t                        m_mipLevels;
+    VkSampleCountFlagBits           m_msaaSamples;
     VkPhysicalDevice                m_physicalDevice;
     VkPipelineLayout                m_pipelineLayout;
     VkQueue                         m_presentQueue;

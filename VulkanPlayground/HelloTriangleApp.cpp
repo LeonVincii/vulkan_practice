@@ -52,7 +52,10 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
   * Public Ctor & Dtor
   * ***********************************************************************************************/
 HelloTriangleApplication::HelloTriangleApplication() :
-    m_commandBuffers            ()
+    m_colorImage                ()
+  , m_colorImageMemory          ()
+  , m_colorImageView            ()
+  , m_commandBuffers            ()
   , m_commandPool               ()
   , m_commandPoolTransient      ()
   , m_currentFrame              (0)
@@ -71,6 +74,7 @@ HelloTriangleApplication::HelloTriangleApplication() :
   , m_indices                   ()
   , m_instance                  ()
   , m_mipLevels                 (0)
+  , m_msaaSamples               (VK_SAMPLE_COUNT_1_BIT)
   , m_physicalDevice            (VK_NULL_HANDLE)
   , m_pipelineLayout            ()
   , m_presentQueue              ()
@@ -171,6 +175,19 @@ void HelloTriangleApplication::cleanup()
     // Destroy window and terminate GLFW.
     glfwDestroyWindow(m_window);
     glfwTerminate();
+}
+
+void HelloTriangleApplication::createColorResources()
+{
+    VkFormat colorFormat = m_swapchainImageFormat;
+
+    // Create image and image view for multisampling.
+    createImage(
+        m_swapchainExtent.width, m_swapchainExtent.height, 1, m_msaaSamples, colorFormat,
+        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_colorImage, m_colorImageMemory
+    );
+    m_colorImageView = createImageView(m_colorImage, 1, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
 void HelloTriangleApplication::createCommandBuffers()
@@ -278,9 +295,10 @@ void HelloTriangleApplication::createDepthResources()
 
     // Create depth image.
     createImage(
-        m_swapchainExtent.width, m_swapchainExtent.height, 1, depthFormat, VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        m_depthImage, m_depthImageMemory);
+        m_swapchainExtent.width, m_swapchainExtent.height, 1, m_msaaSamples, depthFormat,
+        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_depthImage, m_depthImageMemory
+    );
 
     // Create depth image view.
     m_depthImageView = createImageView(m_depthImage, 1, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
@@ -404,9 +422,10 @@ void HelloTriangleApplication::createFramebuffers()
     // Iterate image views and create framebuffers for each of them.
     for (size_t i = 0; i < m_swapchainImageViews.size(); ++ i)
     {
-        std::array<VkImageView, 2> attachments = {
-            m_swapchainImageViews[i],
-            m_depthImageView
+        std::array<VkImageView, 3> attachments = {
+            m_colorImageView,
+            m_depthImageView,
+            m_swapchainImageViews[i]
         };
 
         VkFramebufferCreateInfo framebufferInfo {};
@@ -502,9 +521,9 @@ void HelloTriangleApplication::createGraphicsPipeline()
     // Multisampling.
     VkPipelineMultisampleStateCreateInfo multisamplingInfo {};
     multisamplingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisamplingInfo.sampleShadingEnable = VK_FALSE;
-    multisamplingInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-    multisamplingInfo.minSampleShading = 1.f;
+    multisamplingInfo.sampleShadingEnable = VK_TRUE;
+    multisamplingInfo.rasterizationSamples = m_msaaSamples;
+    multisamplingInfo.minSampleShading = .2f;
     multisamplingInfo.pSampleMask = nullptr;
     multisamplingInfo.alphaToCoverageEnable = VK_FALSE;
     multisamplingInfo.alphaToOneEnable = VK_FALSE;
@@ -700,6 +719,7 @@ void HelloTriangleApplication::createLogicalDevice()
     // Specify the used device features.
     VkPhysicalDeviceFeatures deviceFeatures {};
     deviceFeatures.samplerAnisotropy = VK_TRUE;
+    deviceFeatures.sampleRateShading = VK_TRUE;
 
     // Create logical device.
     VkDeviceCreateInfo createInfo {};
@@ -738,13 +758,13 @@ void HelloTriangleApplication::createRenderPass()
 {
     VkAttachmentDescription colorAttachment {};
     colorAttachment.format = m_swapchainImageFormat;
-    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.samples = m_msaaSamples;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference colorAttachmentRef {};
     colorAttachmentRef.attachment = 0;
@@ -752,7 +772,7 @@ void HelloTriangleApplication::createRenderPass()
 
     VkAttachmentDescription depthAttachment {};
     depthAttachment.format = findDepthFormat();
-    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthAttachment.samples = m_msaaSamples;
     depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -764,13 +784,31 @@ void HelloTriangleApplication::createRenderPass()
     depthAttachmentRef.attachment = 1;
     depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    std::array<VkAttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
+    // Multisampled images can't be presented, so we need to resolve it into a regular image.
+    VkAttachmentDescription colorAttachmentResolve {};
+    colorAttachmentResolve.format = m_swapchainImageFormat;
+    colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference colorAttachmentResolveRef {};
+    colorAttachmentResolveRef.attachment = 2;
+    colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkSubpassDescription subpass {};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorAttachmentRef;
     subpass.pDepthStencilAttachment = &depthAttachmentRef;
+    subpass.pResolveAttachments = &colorAttachmentResolveRef;
+
+    std::array<VkAttachmentDescription, 3> attachments = {
+        colorAttachment, depthAttachment, colorAttachmentResolve
+    };
 
     VkSubpassDependency dependency {};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -927,9 +965,9 @@ void HelloTriangleApplication::createTextureImage()
 
     // Create texture image object on GPU and bind with its allocated memory.
     createImage(
-        textureWidth, textureHeight, m_mipLevels, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_textureImage, m_textureImageMemory
+        textureWidth, textureHeight, m_mipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB,
+        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+        VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_textureImage, m_textureImageMemory
     );
 
     // Copy the staging buffer to the texture image, which involves two steps:
@@ -1044,6 +1082,11 @@ void HelloTriangleApplication::createVertexBuffer()
 
 void HelloTriangleApplication::destroySwapchain()
 {
+    // Destroy color image, image view and memory.
+    vkDestroyImageView(m_device, m_colorImageView, nullptr);
+    vkDestroyImage(m_device, m_colorImage, nullptr);
+    vkFreeMemory(m_device, m_colorImageMemory, nullptr);
+
     // Destroy depth image, image view and memory.
     vkDestroyImageView(m_device, m_depthImageView, nullptr);
     vkDestroyImage(m_device, m_depthImage, nullptr);
@@ -1295,6 +1338,7 @@ void HelloTriangleApplication::initVulkan()
     createDescriptorSetlayout();
     createGraphicsPipeline();
     createCommandPools();
+    createColorResources();
     createDepthResources();
     createFramebuffers();
     createTextureImage();
@@ -1385,6 +1429,7 @@ void HelloTriangleApplication::recreateSwapchain()
     createImageViews();
     createRenderPass();
     createGraphicsPipeline();
+    createColorResources();
     createDepthResources();
     createFramebuffers();
     createUniformBuffers();
@@ -1724,8 +1769,8 @@ void HelloTriangleApplication::createBuffer(VkDeviceSize size, VkBufferUsageFlag
 }
 
 void HelloTriangleApplication::createImage(uint32_t width, uint32_t height, uint32_t mipLevels,
-    VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
-    VkImage& image, VkDeviceMemory& imageMemory)
+    VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
+    VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
 {
     // Create image object.
     VkImageCreateInfo imageInfo {};
@@ -1741,7 +1786,7 @@ void HelloTriangleApplication::createImage(uint32_t width, uint32_t height, uint
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage = usage;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.samples = numSamples;
     imageInfo.flags = 0;
 
     if (vkCreateImage(m_device, &imageInfo, nullptr, &image) != VK_SUCCESS)
@@ -1931,6 +1976,24 @@ VkFormat HelloTriangleApplication::findSupportedFormat(const std::vector<VkForma
     throw std::runtime_error("failed to find supported format");
 }
 
+VkSampleCountFlagBits HelloTriangleApplication::getMaxSampleCount()
+{
+    VkPhysicalDeviceProperties physicalDeviceProps;
+    vkGetPhysicalDeviceProperties(m_physicalDevice, &physicalDeviceProps);
+
+    VkSampleCountFlags counts = physicalDeviceProps.limits.framebufferColorSampleCounts &
+        physicalDeviceProps.limits.framebufferDepthSampleCounts;
+
+    if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
+    if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
+    if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
+    if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
+    if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
+    if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
+
+    return VK_SAMPLE_COUNT_1_BIT;
+}
+
 std::vector<const char*> HelloTriangleApplication::getRequiredExtensions()
 {
     uint32_t glfwExtensionCount = 0;
@@ -2041,6 +2104,7 @@ void HelloTriangleApplication::selectPhysicalDevice()
         {
             // Only pick the first suitable device.
             m_physicalDevice = device;
+            m_msaaSamples = getMaxSampleCount();
             break;
         }
     }

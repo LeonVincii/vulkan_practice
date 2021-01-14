@@ -423,8 +423,11 @@ void HelloTriangleApplication::createFramebuffers()
     for (size_t i = 0; i < m_swapchainImageViews.size(); ++ i)
     {
         std::array<VkImageView, 3> attachments = {
+            // View to the multisampled image (rendering target).
             m_colorImageView,
+            // View to the depth image.
             m_depthImageView,
+            // View to the presentation image (resolved from multisampled image).
             m_swapchainImageViews[i]
         };
 
